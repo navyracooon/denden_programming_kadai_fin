@@ -31,6 +31,7 @@ int main() {
 
     fc(10, 784, train_x, A_784x10, b_784x10, y);
     relu(10, y, y);
+    softmax(10, y, y);
     print(1, 10, y);
     return 0;
 }
@@ -79,12 +80,23 @@ void relu(int n, float* x, float* y) {
     }
 }
 
-void softmax(int n, float* x, float* y) {
-    int sum_exp = 0;
+float max(int n, float* x) {
+    float max_val = x[0];
     for (int i=0; i<n; i++) {
-        sum_exp += exp(x[i]);
+        if (max_val < x[i]) {
+            max_val = x[i];
+        }
+    }
+    return max_val;
+}
+
+void softmax(int n, float* x, float* y) {
+    float sum_exp = 0;
+    float max_val = max(n, x);
+    for (int i=0; i<n; i++) {
+        sum_exp += exp(x[i] - max_val);
     }
     for (int i=0; i<n; i++) {
-        y[i] = exp(x[i]) / exp(sum_exp);
+        y[i] = exp(x[i] - max_val) / sum_exp;
     }
 }
