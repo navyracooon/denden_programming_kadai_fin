@@ -3,167 +3,19 @@
 #include <stdlib.h>
 #include <math.h>
 
-void init(int n, float x, float *o);
-void ordered_init(int n, int *o);
-void rand_init(int n, float *o);
-void shuffle(int n, int *x);
-void add(int m, const float* x, float* o);
-void scale(int n, float x, float *o);
-int inference6(const float* A1, const float* b1,
-               const float* A2, const float* b2,
-               const float* A3, const float* b3,
-               const float* x, float* y);
-void backward6(const float* A1, const float* b1,
-               const float* A2, const float* b2,
-               const float* A3, const float* b3,
-               const float*x, unsigned char t, float* y,
-               float* dEdA1, float* dEdb1,
-               float* dEdA2, float* dEdb2,
-               float* dEdA3, float* dEdb3);
-float cross_entropy_error(const float* y, int t);
+void load(const char *filename, int m, int n, float *A, float *b);
 
-int main() {
-    // データ読み込み
-    float* train_x = NULL;
-    unsigned char* train_y = NULL;
-    int train_count = -1;
-
-    float* test_x = NULL;
-    unsigned char* test_y = NULL;
-    int test_count = -1;
-
-    int width = -1;
-    int height = -1;
-
-    load_mnist(&train_x, &train_y, &train_count,
-               &test_x, &test_y, &test_count,
-               &width, &height);
-
-    // 処理層
-    int epoch = 10;
-    int n = 100;
-    int N = train_count;
-    float h = 0.1;
-
+int main(int argc, char* argv[]) {
     float* A1 = malloc(sizeof(float) * 50 * 784);
     float* b1 = malloc(sizeof(float) * 50);
     float* A2 = malloc(sizeof(float) * 100 * 50);
     float* b2 = malloc(sizeof(float) * 100);
-    float* A3 = malloc(sizeof(float) * 10 * 100);
+    float* A3 = malloc(sizeof(float) * 100 * 10);
     float* b3 = malloc(sizeof(float) * 10);
-    rand_init(50 * 784, A1);
-    rand_init(50, b1);
-    rand_init(100 * 50, A2);
-    rand_init(100, b2);
-    rand_init(10 * 100, A3);
-    rand_init(10, b3);
-
-
-    for (int i=0; i<epoch; i++) {
-        int* index = malloc(sizeof(int) * N);  //高速化の観点からはmalloc宣言はループ外に出せる
-        ordered_init(N, index);
-        shuffle(N, index);
-
-        int next_index = index[0];
-        int offset = 0;
-        for (int j=0; j<N/n; j++) {
-            float* avg_dEdA1 = malloc(sizeof(float) * 50 * 784);
-            float* avg_dEdb1 = malloc(sizeof(float) * 50);
-            float* avg_dEdA2 = malloc(sizeof(float) * 100 * 50);
-            float* avg_dEdb2 = malloc(sizeof(float) * 100);
-            float* avg_dEdA3 = malloc(sizeof(float) * 10 * 100);
-            float* avg_dEdb3 = malloc(sizeof(float) * 10);
-            init(50 * 784, 0, avg_dEdA1);
-            init(50, 0, avg_dEdb1);
-            init(100 * 50, 0, avg_dEdA2);
-            init(100, 0, avg_dEdb2);
-            init(10 * 100, 0, avg_dEdA3);
-            init(10, 0, avg_dEdb3);
-
-            for (int k=0; k<n; k++) {
-                next_index = index[k + offset];
-
-                float* y = malloc(sizeof(float) * 10);
-                float* dEdA1 = malloc(sizeof(float) * 50 * 784);
-                float* dEdb1 = malloc(sizeof(float) * 50);
-                float* dEdA2 = malloc(sizeof(float) * 100 * 50);
-                float* dEdb2 = malloc(sizeof(float) * 100);
-                float* dEdA3 = malloc(sizeof(float) * 10 * 100);
-                float* dEdb3 = malloc(sizeof(float) * 10);
-
-                backward6(A1, b1, A2, b2, A3, b3,
-                          train_x + 784 * next_index, train_y[next_index], y,
-                          dEdA1, dEdb1, dEdA2, dEdb2, dEdA3, dEdb3);
-                add(50 * 784, dEdA1, avg_dEdA1);
-                add(50, dEdb1, avg_dEdb1);
-                add(100 * 50, dEdA2, avg_dEdA2);
-                add(100, dEdb2, avg_dEdb2);
-                add(10 * 100, dEdA3, avg_dEdA3);
-                add(10, dEdb3, avg_dEdb3);
-
-                free(y);
-                free(dEdA1);
-                free(dEdb1);
-                free(dEdA2);
-                free(dEdb2);
-                free(dEdA3);
-                free(dEdb3);
-            }
-
-            scale(50 * 784, (float) 1 / n, avg_dEdA1);
-            scale(50, (float) 1 / n, avg_dEdb1);
-            scale(100 * 50, (float) 1 / n, avg_dEdA2);
-            scale(100, (float) 1 / n, avg_dEdb2);
-            scale(10 * 100, (float) 1 / n, avg_dEdA3);
-            scale(10, (float) 1 / n, avg_dEdb3);
-
-            scale(50 * 784, -h, avg_dEdA1);
-            scale(50, -h, avg_dEdb1);
-            scale(100 * 50, -h, avg_dEdA2);
-            scale(100, -h, avg_dEdb2);
-            scale(10 * 100, -h, avg_dEdA3);
-            scale(10, -h, avg_dEdb3);
-            
-            add(50 * 784, avg_dEdA1, A1);
-            add(50, avg_dEdb1, b1);
-            add(100 * 50, avg_dEdA2, A2);
-            add(100, avg_dEdb2, b2);
-            add(10 * 100, avg_dEdA3, A3);
-            add(10, avg_dEdb3, b3);
-
-            free(avg_dEdA1);
-            free(avg_dEdb1);
-            free(avg_dEdA2);
-            free(avg_dEdb2);
-            free(avg_dEdA3);
-            free(avg_dEdb3);
-
-            offset += n;
-        }
-
-        float E = 0;
-        int correct_answer_sum = 0;
-
-        for (int j=0; j < test_count; j++) {
-            float* y = malloc(sizeof(float) * 10);
-            if (inference6(A1, b1, A2, b2, A3, b3, test_x + j * width * height, y) == test_y[j]) {
-                correct_answer_sum++;
-            }
-            E += cross_entropy_error(y, test_y[j]);
-            free(y);
-        }
-        E /= test_count;
-        float accuracy = ((float) correct_answer_sum / test_count) * 100;
-
-        printf("Epoch: %d, Acc: %f%%, E: %f\n", i+1, accuracy, E);
-        free(index);
-    }
-    free(A1);
-    free(b1);
-    free(A2);
-    free(b2);
-    free(A3);
-    free(b3);
+    float* x = load_mnist_bmp(argv[4]);
+    load(argv[1], 50, 784, A1, b1);
+    load(argv[2], 100, 50, A2, b2);
+    load(argv[3], 10, 100, A3, b3);
     return 0;
 }
 
