@@ -4,9 +4,7 @@
 #include <math.h>
 
 void print(int m, int n, const float* x);
-void fc(int m, int n, const float* x, const float* A, const float* b, float* y);
-void relu(int n, float* x, float* y);
-void softmax(int n, float* x, float* y);
+int inference3(const float* A, const float* b, const float* x);
 
 int main() {
     // データ読み込み
@@ -26,13 +24,8 @@ int main() {
                &width, &height);
 
     // 処理層
-
-    float* y = malloc(sizeof(float)*10);
-
-    fc(10, 784, train_x, A_784x10, b_784x10, y);
-    relu(10, y, y);
-    softmax(10, y, y);
-    print(1, 10, y);
+    int ans = inference3(A_784x10, b_784x10, train_x);
+    printf("%d %d\n", ans, train_y[0]);
     return 0;
 }
 
@@ -72,7 +65,7 @@ void fc(int m, int n, const float* x, const float* A, const float* b, float* y) 
     add(m, b, y);
 }
 
-void relu(int n, float* x, float* y) {
+void relu(int n, const float* x, float* y) {
     for (int i=0; i<n; i++) {
         if (x[i] < 0) {
             y[i] = 0;
@@ -80,7 +73,7 @@ void relu(int n, float* x, float* y) {
     }
 }
 
-float max(int n, float* x) {
+float max(int n, const float* x) {
     float max_val = x[0];
     for (int i=0; i<n; i++) {
         if (max_val < x[i]) {
@@ -90,7 +83,19 @@ float max(int n, float* x) {
     return max_val;
 }
 
-void softmax(int n, float* x, float* y) {
+int max_index(int n, const float* x) {
+    int max_index = 0;
+    float max_val = x[0];
+    for (int i=0; i<n; i++) {
+        if (max_val < x[i]) {
+            max_val = x[i];
+            max_index = i;
+        }
+    }
+    return max_index;
+}
+
+void softmax(int n, const float* x, float* y) {
     float sum_exp = 0;
     float max_val = max(n, x);
     for (int i=0; i<n; i++) {
@@ -99,4 +104,18 @@ void softmax(int n, float* x, float* y) {
     for (int i=0; i<n; i++) {
         y[i] = exp(x[i] - max_val) / sum_exp;
     }
+}
+
+int inference3(const float* A, const float* b, const float* x) {
+    int m = 10, n = 784;
+    float ans;
+    float* y = malloc(sizeof(float) * 10);
+
+    fc(m, n, x, A, b, y);
+    relu(m, y, y);
+    softmax(m, y, y);
+
+    ans = max_index(m, y);
+    free(y);
+    return ans;
 }
