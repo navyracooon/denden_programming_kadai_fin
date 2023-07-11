@@ -24,8 +24,8 @@ int main() {
                &width, &height);
 
     // 処理層
-    int ans = inference3(A_784x10, b_784x10, train_x);
-    printf("%d %d\n", ans, train_y[0]);
+    int i = 0;
+    save_mnist_bmp(train_x + 784 * i, "train_%05d.bmp", i);
     return 0;
 }
 
