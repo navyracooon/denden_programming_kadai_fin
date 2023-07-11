@@ -13,8 +13,13 @@ int inference6(const float* A1, const float* b1,
                const float* A2, const float* b2,
                const float* A3, const float* b3,
                const float* x, float* y);
-void backward3(const float* A, const float* b, const float*x, unsigned char t,
-               float* y, float* dEdA, float* dEdb);
+void backward6(const float* A1, const float* b1,
+               const float* A2, const float* b2,
+               const float* A3, const float* b3,
+               const float*x, unsigned char t, float* y,
+               float* dEdA1, float* dEdb1,
+               float* dEdA2, float* dEdb2,
+               float* dEdA3, float* dEdb3);
 float cross_entropy_error(const float* y, int t);
 
 int main() {
@@ -35,23 +40,130 @@ int main() {
                &width, &height);
 
     // 処理層
-    float E = 0;
-    int correct_answer_sum = 0;
-    for (int j=0; j < test_count; j++) {
-        float* y = malloc(sizeof(float) * 10);
-        if (inference6(A1_784_50_100_10, b1_784_50_100_10,
-                       A2_784_50_100_10, b2_784_50_100_10,
-                       A3_784_50_100_10, b3_784_50_100_10,
-                       test_x + j * width * height, y) == test_y[j]) {
-            correct_answer_sum++;
-        }
-        E += cross_entropy_error(y, test_y[j]);
-        free(y);
-    }
-    E /= test_count;
-    float accuracy = ((float) correct_answer_sum / test_count) * 100;
+    int epoch = 10;
+    int n = 100;
+    int N = train_count;
+    float h = 0.1;
 
-    printf("Acc: %f%%, E: %f\n", accuracy, E);
+    float* A1 = malloc(sizeof(float) * 50 * 784);
+    float* b1 = malloc(sizeof(float) * 50);
+    float* A2 = malloc(sizeof(float) * 100 * 50);
+    float* b2 = malloc(sizeof(float) * 100);
+    float* A3 = malloc(sizeof(float) * 10 * 100);
+    float* b3 = malloc(sizeof(float) * 10);
+    rand_init(50 * 784, A1);
+    rand_init(50, b1);
+    rand_init(100 * 50, A2);
+    rand_init(100, b2);
+    rand_init(10 * 100, A3);
+    rand_init(10, b3);
+
+
+    for (int i=0; i<epoch; i++) {
+        int* index = malloc(sizeof(int) * N);  //高速化の観点からはmalloc宣言はループ外に出せる
+        ordered_init(N, index);
+        shuffle(N, index);
+
+        int next_index = index[0];
+        int offset = 0;
+        for (int j=0; j<N/n; j++) {
+            float* avg_dEdA1 = malloc(sizeof(float) * 50 * 784);
+            float* avg_dEdb1 = malloc(sizeof(float) * 50);
+            float* avg_dEdA2 = malloc(sizeof(float) * 100 * 50);
+            float* avg_dEdb2 = malloc(sizeof(float) * 100);
+            float* avg_dEdA3 = malloc(sizeof(float) * 10 * 100);
+            float* avg_dEdb3 = malloc(sizeof(float) * 10);
+            init(50 * 784, 0, avg_dEdA1);
+            init(50, 0, avg_dEdb1);
+            init(100 * 50, 0, avg_dEdA2);
+            init(100, 0, avg_dEdb2);
+            init(10 * 100, 0, avg_dEdA3);
+            init(10, 0, avg_dEdb3);
+
+            for (int k=0; k<n; k++) {
+                next_index = index[k + offset];
+
+                float* y = malloc(sizeof(float) * 10);
+                float* dEdA1 = malloc(sizeof(float) * 50 * 784);
+                float* dEdb1 = malloc(sizeof(float) * 50);
+                float* dEdA2 = malloc(sizeof(float) * 100 * 50);
+                float* dEdb2 = malloc(sizeof(float) * 100);
+                float* dEdA3 = malloc(sizeof(float) * 10 * 100);
+                float* dEdb3 = malloc(sizeof(float) * 10);
+
+                backward6(A1, b1, A2, b2, A3, b3,
+                          train_x + 784 * next_index, train_y[next_index], y,
+                          dEdA1, dEdb1, dEdA2, dEdb2, dEdA3, dEdb3);
+                add(50 * 784, dEdA1, avg_dEdA1);
+                add(50, dEdb1, avg_dEdb1);
+                add(100 * 50, dEdA2, avg_dEdA2);
+                add(100, dEdb2, avg_dEdb2);
+                add(10 * 100, dEdA3, avg_dEdA3);
+                add(10, dEdb3, avg_dEdb3);
+
+                free(y);
+                free(dEdA1);
+                free(dEdb1);
+                free(dEdA2);
+                free(dEdb2);
+                free(dEdA3);
+                free(dEdb3);
+            }
+
+            scale(50 * 784, (float) 1 / n, avg_dEdA1);
+            scale(50, (float) 1 / n, avg_dEdb1);
+            scale(100 * 50, (float) 1 / n, avg_dEdA2);
+            scale(100, (float) 1 / n, avg_dEdb2);
+            scale(10 * 100, (float) 1 / n, avg_dEdA3);
+            scale(10, (float) 1 / n, avg_dEdb3);
+
+            scale(50 * 784, -h, avg_dEdA1);
+            scale(50, -h, avg_dEdb1);
+            scale(100 * 50, -h, avg_dEdA2);
+            scale(100, -h, avg_dEdb2);
+            scale(10 * 100, -h, avg_dEdA3);
+            scale(10, -h, avg_dEdb3);
+            
+            add(50 * 784, avg_dEdA1, A1);
+            add(50, avg_dEdb1, b1);
+            add(100 * 50, avg_dEdA2, A2);
+            add(100, avg_dEdb2, b2);
+            add(10 * 100, avg_dEdA3, A3);
+            add(10, avg_dEdb3, b3);
+
+            free(avg_dEdA1);
+            free(avg_dEdb1);
+            free(avg_dEdA2);
+            free(avg_dEdb2);
+            free(avg_dEdA3);
+            free(avg_dEdb3);
+
+            offset += n;
+        }
+
+        float E = 0;
+        int correct_answer_sum = 0;
+
+        for (int j=0; j < test_count; j++) {
+            float* y = malloc(sizeof(float) * 10);
+            if (inference6(A1, b1, A2, b2, A3, b3, test_x + j * width * height, y) == test_y[j]) {
+                correct_answer_sum++;
+            }
+            E += cross_entropy_error(y, test_y[j]);
+            free(y);
+        }
+        E /= test_count;
+        float accuracy = ((float) correct_answer_sum / test_count) * 100;
+
+        printf("Epoch: %d, Acc: %f%%, E: %f\n", i+1, accuracy, E);
+        free(index);
+    }
+    free(A1);
+    free(b1);
+    free(A2);
+    free(b2);
+    free(A3);
+    free(b3);
     return 0;
 }
 
@@ -227,27 +339,50 @@ void fc_bwd(int m, int n, const float* x, const float* dEdy,
     }
 }
 
-void backward3(const float* A, const float* b, const float*x, unsigned char t,
-               float* y, float* dEdA, float* dEdb) {
+void backward6(const float* A1, const float* b1,
+               const float* A2, const float* b2,
+               const float* A3, const float* b3,
+               const float*x, unsigned char t, float* y,
+               float* dEdA1, float* dEdb1,
+               float* dEdA2, float* dEdb2,
+               float* dEdA3, float* dEdb3) {
     // 推論
-    float* relu_x = malloc(sizeof(float) * 10);
-    fc(10, 784, x, A, b, relu_x);
-    relu(10, relu_x, y);
+    float* relu_x1 = malloc(sizeof(float) * 50);
+    float* relu_x2 = malloc(sizeof(float) * 100);
+    float* fc_x1 = malloc(sizeof(float) * 50);
+    float* fc_x2 = malloc(sizeof(float) * 100);
+    fc(50, 784, x, A1, b1, relu_x1);
+    relu(50, relu_x1, fc_x1);
+    fc(100, 50, fc_x1, A2, b2, relu_x2);
+    relu(100, relu_x2, fc_x2);
+    fc(10, 100, fc_x2, A3, b3, y);
     softmax(10, y, y);
 
     // 誤差逆伝播
     float* softmax_dEdx = malloc(sizeof(float) * 10);
-    float* relu_dEdx = malloc(sizeof(float) * 10);
-    float* fc_dEdx = malloc(sizeof(float) * 784);
+    float* relu_dEdx2 = malloc(sizeof(float) * 100);
+    float* relu_dEdx1 = malloc(sizeof(float) * 50);
+    float* fc_dEdx3 = malloc(sizeof(float) * 100);
+    float* fc_dEdx2 = malloc(sizeof(float) * 50);
+    float* fc_dEdx1 = malloc(sizeof(float) * 784);
 
     softmaxwithloss_bwd(10, y, t, softmax_dEdx);
-    relu_bwd(10, relu_x, softmax_dEdx, relu_dEdx);
-    fc_bwd(10, 784, x, relu_dEdx, A, dEdA, dEdb, fc_dEdx);
+    fc_bwd(10, 100, fc_x2, softmax_dEdx, A3, dEdA3, dEdb3, fc_dEdx3);
+    relu_bwd(100, relu_x2, fc_dEdx3, relu_dEdx2);
+    fc_bwd(100, 50, fc_x1, relu_dEdx2, A2, dEdA2, dEdb2, fc_dEdx2);
+    relu_bwd(50, relu_x1, fc_dEdx2, relu_dEdx1);
+    fc_bwd(50, 784, x, relu_dEdx1, A1, dEdA1, dEdb1, fc_dEdx1);
 
-    free(relu_x);
+    free(relu_x1);
+    free(relu_x2);
+    free(fc_x1);
+    free(fc_x2);
     free(softmax_dEdx);
-    free(relu_dEdx);
-    free(fc_dEdx);
+    free(relu_dEdx2);
+    free(relu_dEdx1);
+    free(fc_dEdx3);
+    free(fc_dEdx2);
+    free(fc_dEdx1);
 }
 
 float cross_entropy_error(const float* y, int t) {
