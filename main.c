@@ -5,9 +5,8 @@
 
 void print(int m, int n, const float* x);
 int inference3(const float* A, const float* b, const float* x);
-void softmaxwithloss_bwd(int n, const float* y, unsigned char t, float* dEdx);
-void relu_bwd(int n, const float* x, const float* dEdy, float* dEdx);
-
+void backward3(const float* A, const float* b, const float*x, unsigned char t,
+               float* y, float* dEdA, float* dEdb);
 int main() {
     // データ読み込み
     float* train_x = NULL;
@@ -26,13 +25,15 @@ int main() {
                &width, &height);
 
     // 処理層
-    int sum = 0;
-    for (int i=0; i<test_count; i++) {
-        if (inference3(A_784x10, b_784x10, test_x + i * width * height) == test_y[i]) {
-            sum++;
-        }
-    }
-    printf("%f%%\n", sum * 100.0 / test_count);
+    float* y = malloc(sizeof(float) * 10);
+    float* dEdA = malloc(sizeof(float) * 784 * 10);
+    float* dEdb = malloc(sizeof(float) * 10);
+    backward3(A_784x10, b_784x10, train_x + 784 * 8, train_y[8], y, dEdA, dEdb);
+    print(10, 784, dEdA);
+    print(1, 10, dEdb);
+    free(y);
+    free(dEdA);
+    free(dEdb);
     return 0;
 }
 
@@ -114,15 +115,14 @@ void softmax(int n, const float* x, float* y) {
 }
 
 int inference3(const float* A, const float* b, const float* x) {
-    int m = 10, n = 784;
     float ans;
     float* y = malloc(sizeof(float) * 10);
 
-    fc(m, n, x, A, b, y);
-    relu(m, y, y);
-    softmax(m, y, y);
+    fc(10, 784, x, A, b, y);
+    relu(10, y, y);
+    softmax(10, y, y);
 
-    ans = max_index(m, y);
+    ans = max_index(10, y);
     free(y);
     return ans;
 }
@@ -147,8 +147,8 @@ void relu_bwd(int n, const float* x, const float* dEdy, float* dEdx) {
     }
 }
 
-void fc_bwd(int m, int n, const float* x, const float* dEdy, unsigned char t,
-    const float* A, float* dEdA, float* dEdb, float* dEdx) {
+void fc_bwd(int m, int n, const float* x, const float* dEdy,
+            const float* A, float* dEdA, float* dEdb, float* dEdx) {
     for (int i=0; i<m; i++) {
         for (int j=0; j<n; j++) {
             dEdA[j + n * i] = dEdy[i] * x[j];
@@ -159,8 +159,31 @@ void fc_bwd(int m, int n, const float* x, const float* dEdy, unsigned char t,
         for (int i=0; i<n; i++) {
             dEdx[i] = 0;
             for (int j=0; j<m; j++) {
-                dEdx[i] += dEdx[i] + A[i + n * j] * dEdy[j];
+                dEdx[i] += A[i + n * j] * dEdy[j];
             }
         }
     }
+}
+
+void backward3(const float* A, const float* b, const float*x, unsigned char t,
+               float* y, float* dEdA, float* dEdb) {
+    // 推論
+    float* relu_x = malloc(sizeof(float) * 10);
+    fc(10, 784, x, A, b, relu_x);
+    relu(10, relu_x, y);
+    softmax(10, y, y);
+
+    // 誤差逆伝播
+    float* softmax_dEdx = malloc(sizeof(float) * 10);
+    float* relu_dEdx = malloc(sizeof(float) * 10);
+    float* fc_dEdx = malloc(sizeof(float) * 784);
+
+    softmaxwithloss_bwd(10, y, t, softmax_dEdx);
+    relu_bwd(10, relu_x, softmax_dEdx, relu_dEdx);
+    fc_bwd(10, 784, x, relu_dEdx, A, dEdA, dEdb, fc_dEdx);
+
+    free(relu_x);
+    free(softmax_dEdx);
+    free(relu_dEdx);
+    free(fc_dEdx);
 }
