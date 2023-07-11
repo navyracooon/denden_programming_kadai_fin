@@ -46,9 +46,27 @@ void print(int m, int n, const float* x) {
     printf("\n");
 }
 
-void add(int m, const float* b, float* y) {
+void add(int m, const float* x, float* o) {
     for (int i=0; i<m; i++) {
-        y[i] += b[i];
+        o[i] += x[i];
+    }
+}
+
+void scale(int n, float x, float *o) {
+    for (int i=0; i<n; i++) {
+        o[i] *= x;
+    }
+}
+
+void init(int n, float x, float *o) {
+    for (int i=0; i<n; i++) {
+        o[i] = x;
+    }
+}
+
+void rand_init(int n, float *o) {
+    for (int i=0; i<n; i++) {
+        o[i] = (((double)rand() / RAND_MAX) * 2) - 1;
     }
 }
 
@@ -201,3 +219,4 @@ void shuffle(int n, int *x) {
 float cross_entropy_error(const float* y, int t) {
     return -log(y[t] + 1e-7);
 }
+
