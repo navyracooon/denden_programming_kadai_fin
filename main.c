@@ -389,3 +389,18 @@ float cross_entropy_error(const float* y, int t) {
     return -log(y[t] + 1e-7);
 }
 
+void save(const char *filename, int m, int n, const float *A, const float *b) {
+    FILE *fp;
+    fp = fopen(filename, "wb");
+    fwrite(A, sizeof(float), m * n, fp);
+    fwrite(b, sizeof(float), m, fp);
+    fclose(fp);
+}
+
+void load(const char *filename, int m, int n, float *A, float *b) {
+    FILE *fp;
+    fp = fopen(filename, "rb");
+    fread(A, sizeof(float), m * n, fp);
+    fread(b, sizeof(float), m, fp);
+    fclose(fp);
+}
