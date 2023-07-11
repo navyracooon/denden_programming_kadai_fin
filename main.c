@@ -146,3 +146,21 @@ void relu_bwd(int n, const float* x, const float* dEdy, float* dEdx) {
         }
     }
 }
+
+void fc_bwd(int m, int n, const float* x, const float* dEdy, unsigned char t,
+    const float* A, float* dEdA, float* dEdb, float* dEdx) {
+    for (int i=0; i<m; i++) {
+        for (int j=0; j<n; j++) {
+            dEdA[j + n * i] = dEdy[i] * x[j];
+        }
+        for (int i=0; i<m; i++) {
+            dEdb[i] = dEdy[i];
+        }
+        for (int i=0; i<n; i++) {
+            dEdx[i] = 0;
+            for (int j=0; j<m; j++) {
+                dEdx[i] += dEdx[i] + A[i + n * j] * dEdy[j];
+            }
+        }
+    }
+}
