@@ -7,6 +7,8 @@ void print(int m, int n, const float* x);
 int inference3(const float* A, const float* b, const float* x);
 void backward3(const float* A, const float* b, const float*x, unsigned char t,
                float* y, float* dEdA, float* dEdb);
+void shuffle(int n, int *x);
+
 int main() {
     // データ読み込み
     float* train_x = NULL;
@@ -25,15 +27,11 @@ int main() {
                &width, &height);
 
     // 処理層
-    float* y = malloc(sizeof(float) * 10);
-    float* dEdA = malloc(sizeof(float) * 784 * 10);
-    float* dEdb = malloc(sizeof(float) * 10);
-    backward3(A_784x10, b_784x10, train_x + 784 * 8, train_y[8], y, dEdA, dEdb);
-    print(10, 784, dEdA);
-    print(1, 10, dEdb);
-    free(y);
-    free(dEdA);
-    free(dEdb);
+    int* index = malloc(sizeof(int)*train_count);
+    for (int i=0; i<train_count; i++) {
+        index[i] = i;
+    }
+    shuffle(train_count, index);
     return 0;
 }
 
@@ -186,4 +184,16 @@ void backward3(const float* A, const float* b, const float*x, unsigned char t,
     free(softmax_dEdx);
     free(relu_dEdx);
     free(fc_dEdx);
+}
+
+void swap(int *pa, int *pb) {
+    int temp = *pa;
+    *pa = *pb;
+    *pb = temp;
+}
+
+void shuffle(int n, int *x) {
+    for (int i=0; i<n; i++) {
+        swap(&x[i], &x[rand() % n]);
+    }
 }
