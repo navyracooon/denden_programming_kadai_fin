@@ -6,6 +6,7 @@
 void print(int m, int n, const float* x);
 int inference3(const float* A, const float* b, const float* x);
 void softmaxwithloss_bwd(int n, const float* y, unsigned char t, float* dEdx);
+void relu_bwd(int n, const float* x, const float* dEdy, float* dEdx);
 
 int main() {
     // データ読み込み
@@ -132,6 +133,16 @@ void softmaxwithloss_bwd(int n, const float* y, unsigned char t, float* dEdx) {
             dEdx[i] = y[i] - 1;
         } else {
             dEdx[i] = y[i];
+        }
+    }
+}
+
+void relu_bwd(int n, const float* x, const float* dEdy, float* dEdx) {
+    for (int i=0; i<n; i++) {
+        if (x[i] > 0) {
+            dEdx[i] = dEdy[i];
+        } else {
+            dEdx[i] = 0;
         }
     }
 }
