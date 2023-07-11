@@ -3,11 +3,16 @@
 #include <stdlib.h>
 #include <math.h>
 
-void print(int m, int n, const float* x);
-int inference3(const float* A, const float* b, const float* x);
+void init(int n, float x, float *o);
+void ordered_init(int n, int *o);
+void rand_init(int n, float *o);
+void shuffle(int n, int *x);
+void add(int m, const float* x, float* o);
+void scale(int n, float x, float *o);
+int inference3(const float* A, const float* b, const float* x, float* y);
 void backward3(const float* A, const float* b, const float*x, unsigned char t,
                float* y, float* dEdA, float* dEdb);
-void shuffle(int n, int *x);
+float cross_entropy_error(const float* y, int t);
 
 int main() {
     // データ読み込み
@@ -27,11 +32,79 @@ int main() {
                &width, &height);
 
     // 処理層
-    int* index = malloc(sizeof(int)*train_count);
-    for (int i=0; i<train_count; i++) {
-        index[i] = i;
+    int epoch = 10;
+    int n = 100;
+    int N = train_count;
+    float h = 0.1;
+
+    float* A = malloc(sizeof(float) * 10 * 784);
+    float* b = malloc(sizeof(float) * 10);
+    rand_init(10 * 784, A);
+    rand_init(10, b);
+
+
+    for (int i=0; i<epoch; i++) {
+        int* index = malloc(sizeof(int) * N);  //高速化の観点からはmalloc宣言はループ外に出せる
+        ordered_init(N, index);
+        shuffle(N, index);
+
+        int next_index = index[0];
+        int offset = 0;
+        for (int j=0; j<N/n; j++) {
+            float* avg_dEdA = malloc(sizeof(float) * 10 * 784);
+            float* avg_dEdb = malloc(sizeof(float) * 10);
+            init(10 * 784, 0, avg_dEdA);
+            init(10, 0, avg_dEdb);
+
+            for (int k=0; k<n; k++) {
+                next_index = index[k + offset];
+
+                float* y = malloc(sizeof(float) * 10);
+                float* dEdA = malloc(sizeof(float) * 10 * 784);
+                float* dEdb = malloc(sizeof(float) * 10);
+                backward3(A, b, train_x + 784 * next_index, train_y[next_index], y, dEdA, dEdb);
+                add(10 * 784, dEdA, avg_dEdA);
+                add(10, dEdb, avg_dEdb);
+
+                free(y);
+                free(dEdA);
+                free(dEdb);
+            }
+
+            scale(10 * 784, (float) 1 / n, avg_dEdA);
+            scale(10, (float) 1 / n, avg_dEdb);
+
+            scale(10 * 784, -h, avg_dEdA);
+            scale(10, -h, avg_dEdb);
+            
+            add(10 * 784, avg_dEdA, A);
+            add(10, avg_dEdb, b);
+
+            free(avg_dEdA);
+            free(avg_dEdb);
+
+            offset += n;
+        }
+
+        float E = 0;
+        int correct_answer_sum = 0;
+
+        for (int j=0; j < test_count; j++) {
+            float* y = malloc(sizeof(float) * 10);
+            if (inference3(A, b, test_x + j * width * height, y) == test_y[j]) {
+                correct_answer_sum++;
+            }
+            E += cross_entropy_error(y, test_y[j]);
+            free(y);
+        }
+        E /= test_count;
+        float accuracy = ((float) correct_answer_sum / test_count) * 100;
+
+        printf("Epoch: %d, Acc: %f%%, E: %f\n", i+1, accuracy, E);
+        free(index);
     }
-    shuffle(train_count, index);
+    free(A);
+    free(b);
     return 0;
 }
 
@@ -64,9 +137,27 @@ void init(int n, float x, float *o) {
     }
 }
 
+void ordered_init(int n, int *o) {
+    for (int i=0; i<n; i++) {
+        o[i] = i;
+    }
+}
+
 void rand_init(int n, float *o) {
     for (int i=0; i<n; i++) {
         o[i] = (((double)rand() / RAND_MAX) * 2) - 1;
+    }
+}
+
+void swap(int *pa, int *pb) {
+    int temp = *pa;
+    *pa = *pb;
+    *pb = temp;
+}
+
+void shuffle(int n, int *x) {
+    for (int i=0; i<n; i++) {
+        swap(&x[i], &x[rand() % n]);
     }
 }
 
@@ -93,6 +184,8 @@ void relu(int n, const float* x, float* y) {
     for (int i=0; i<n; i++) {
         if (x[i] < 0) {
             y[i] = 0;
+        } else {
+            y[i] = x[i];
         }
     }
 }
@@ -130,16 +223,14 @@ void softmax(int n, const float* x, float* y) {
     }
 }
 
-int inference3(const float* A, const float* b, const float* x) {
+int inference3(const float* A, const float* b, const float* x, float* y) {
     float ans;
-    float* y = malloc(sizeof(float) * 10);
 
     fc(10, 784, x, A, b, y);
     relu(10, y, y);
     softmax(10, y, y);
 
     ans = max_index(10, y);
-    free(y);
     return ans;
 }
 
@@ -202,18 +293,6 @@ void backward3(const float* A, const float* b, const float*x, unsigned char t,
     free(softmax_dEdx);
     free(relu_dEdx);
     free(fc_dEdx);
-}
-
-void swap(int *pa, int *pb) {
-    int temp = *pa;
-    *pa = *pb;
-    *pb = temp;
-}
-
-void shuffle(int n, int *x) {
-    for (int i=0; i<n; i++) {
-        swap(&x[i], &x[rand() % n]);
-    }
 }
 
 float cross_entropy_error(const float* y, int t) {
